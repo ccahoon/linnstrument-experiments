@@ -34,6 +34,9 @@
 
 @property (weak) IBOutlet NSTextField *statusTextField;
 
+@property (strong) NSMutableDictionary *layouts;
+@property (strong) NSMutableDictionary *grid;
+
 @end
 
 @implementation ViewController
@@ -48,7 +51,7 @@
     [self.linnLayoutsButton addItemWithTitle:@"49 EDO 7x7 with Low Row Ribbon"];
     self.linnLayoutsButton.lastItem.representedObject = @"7x7";
 
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_MIDISetupChanged:) name:@"SMClientSetupChangedNotification" object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(MIDISetupChanged:) name:@"SMClientSetupChangedNotification" object:nil];
 
     // Insert code here to initialize your application
     // MIDI
@@ -59,9 +62,7 @@
         self.portOut =  [[SMPortOutputStream alloc] init];
     }
 
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        [self _MIDISetupChanged:nil];
-    });
+    [self MIDISetupChanged:nil];
 
 /*    @catch ( NSException *exception )
     {
@@ -70,70 +71,140 @@
     }*/
 }
 
+- (NSDictionary <NSString *, NSNumber *>*)linnstrumentColorsByName
+{
+    return @{
+                                  @"off": @0,
+                                  @"red": @1,
+                                  @"yellow": @2,
+                                  @"green": @3,
+                                  @"cyan": @4,
+                                  @"blue": @5,
+                                  @"magenta": @6,
+                                  @"black": @7,
+                                  @"white": @8,
+                                  @"orange": @9,
+                                  @"lime": @10,
+                                  @"pink": @11,
+                                  };
+}
+
 - (void) connectToLinnstrument
 {
-    if ( self.linnstrumentOut )
+    if ( !self.linnstrumentOut )
+        return;
+
+    NSLog(@"found linnstrument: %@", self.linnstrumentOut.endpoints.anyObject);
+
+    SMVoiceMessage *setCol = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusControl];
+    setCol.channel = 1;
+    setCol.dataByte1 = 20; // Sets Column coordinate for cell color change with CC 22 (starts from 0)
+    setCol.dataByte2 = 2; // Column
+
+    SMVoiceMessage *setRow = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusControl];
+    setRow.channel = 1;
+    setRow.dataByte1 = 21; // Row coordinate for cell color change with CC 22 (starts from 0)
+    setRow.dataByte2 = 2; // Row
+
+    SMVoiceMessage *setColor = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusControl];
+    setColor.channel = 1;
+    setColor.dataByte1 = 22; // Row coordinate for cell color change with CC 22 (starts from 0)
+
+    NSMutableArray *settings = [NSMutableArray array];
+
+    // Enable firmware user mode: https://github.com/rogerlinndesign/linnstrument-firmware/blob/master/user_firmware_mode.txt
+    [settings addObjectsFromArray:[self messagesForNRPNMessage:245 value:1]];
+
+    NSString *layout = self.selectedLayout;
+
+    NSMutableDictionary *grid = nil;
+
+    int notesPerColumn = 7;
+    int firstNoteRow = 0;
+    NSArray <NSString *>*colorsByRow = nil;
+    if ( [layout isEqualToString:@"7x8"] )
     {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            NSLog(@"found linnstrument: %@", self.linnstrumentOut.endpoints.anyObject);
+        grid = [NSMutableDictionary dictionaryWithCapacity:7*8];
+        notesPerColumn = 8;
+        firstNoteRow = 0;
+        colorsByRow = @[@"red", @"orange", @"yellow", @"lime", @"green", @"cyan", @"blue", @"magenta"];
+    }
+    else if ( [layout isEqualToString:@"7x7"] )
+    {
+        grid = [NSMutableDictionary dictionaryWithCapacity:7*7];
+        firstNoteRow = 1;
+        colorsByRow = @[@"off", @"red", @"orange", @"yellow", @"lime", @"green", @"blue", @"magenta"];
+    }
+    else
+    {
+        colorsByRow = nil;
+    }
 
-            SMVoiceMessage *setCol = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusControl];
-            setCol.channel = 1;
-            setCol.dataByte1 = 20; // Sets Column coordinate for cell color change with CC 22 (starts from 0)
-            setCol.dataByte2 = 2; // Column
+    NSDictionary <NSString *, NSNumber *>*linnColorsByName = self.linnstrumentColorsByName;
+    NSMutableDictionary *cell = [NSMutableDictionary dictionary];
 
-            SMVoiceMessage *setRow = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusControl];
-            setRow.channel = 1;
-            setRow.dataByte1 = 21; // Row coordinate for cell color change with CC 22 (starts from 0)
-            setRow.dataByte2 = 2; // Row
+    // Row is bottom up, col is left right
+    // Incoming data from Linnstrument is 1 based x/y, color setting data is 0 based x/y.
+    for ( int y = 0; y < 8; y++ )
+    {
+        // Big Linnstrument has 21 columns.
+        for ( int x = 0; x < 21; x++ )
+        {
+            [cell removeAllObjects];
+            cell[@"y"] = @(y);
+            cell[@"x"] = @(x);
 
-            SMVoiceMessage *setColor = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusControl];
-            setColor.channel = 1;
-            setColor.dataByte1 = 22; // Row coordinate for cell color change with CC 22 (starts from 0)
+            setRow.dataByte2 = y;
+            setCol.dataByte2 = x+1;
+            setColor.dataByte2 = linnColorsByName[colorsByRow[y]].intValue;// Color
 
-            NSMutableArray *settings = [NSMutableArray array];
-
-            // Enable firmware user mode: https://github.com/rogerlinndesign/linnstrument-firmware/blob/master/user_firmware_mode.txt
-            [settings addObjectsFromArray:[self messagesForNRPNMessage:245 value:1]];
-
-            for ( int row = 0; row < 8; row++ )
+            if ( y < firstNoteRow )
             {
-                for ( int col = 1; col < 20; col ++ )
-                {
-                    setRow.dataByte2 = row;
-                    setCol.dataByte2 = col;
-                    setColor.dataByte2 = arc4random_uniform(12); // Color
+                cell[@"type"] = @"ribbon";
+            }
+            else
+            {
+                cell[@"type"] = @"note";
 
-                    [settings addObjectsFromArray:@[[setCol copy], [setRow copy], [setColor copy]]];
-                }
+                int note = (x * notesPerColumn + y);
+                int channel = note / 127 + 1;
+
+                int channelNote = note;
+                if ( channel > 0 )
+                    channelNote = (note % (channel * 127)) - 1;
+
+                cell[@"note"] = @(channelNote);
+                cell[@"channel"] = @(channel);
+                cell[@"index"] = @(note);
             }
 
-            // NSLog(@"settings: %@", settings);
+            cell[@"colorName"] = colorsByRow[y];
+            cell[@"color"] = linnColorsByName[colorsByRow[y]];
+            cell[@"color-setting-messages"] = @[[setCol copy], [setRow copy], [setColor copy]];
 
-            // NSLog(@"messages: %@ to outstream %@", [setColorMessages valueForKey:@"dataForDisplay"], linnstrumentOutStream);
-
-            NSLog(@"setting up user mode and random colors");
-            [self.linnstrumentOut takeMIDIMessages:settings];
-
-            self.linnstrumentInUserMode = YES; // TODO verify with a quick communication
-            self.linnstrumentState = [NSMutableDictionary dictionaryWithCapacity:8 * 20];
-
-            /*
-             0   Off
-             1   Red
-             2   Yellow
-             3   Green
-             4   Cyan
-             5   Blue
-             6   Magenta
-             7   Black
-             8   White
-             9   Orange
-             10  Lime
-             11 Pink */
-        });
-
+            grid[[NSString stringWithFormat:@"%dx%d", x, y]] = [cell copy];
+        }
     }
+
+    self.grid = grid;
+    for ( NSDictionary <NSString *, NSString *>*cell in self.grid.allValues )
+    {
+        NSArray *colorSettings = (NSArray <SMMessage *>*)cell[@"color-setting-messages"];
+        if ( colorSettings )
+        {
+            [settings addObjectsFromArray:colorSettings];
+        }
+    }
+
+    // NSLog(@"settings: %@", settings);
+
+    // NSLog(@"messages: %@ to outstream %@", [setColorMessages valueForKey:@"dataForDisplay"], linnstrumentOutStream);
+
+    NSLog(@"setting up user mode and random colors");
+    [self.linnstrumentOut takeMIDIMessages:settings];
+
+    self.linnstrumentInUserMode = YES; // TODO verify with a quick communication
+    self.linnstrumentState = [NSMutableDictionary dictionaryWithCapacity:8 * 20];
 }
 
 - (NSArray <SMMessage *>*) messagesForNRPNMessage:(int16_t)number value:(int16_t)value
@@ -180,13 +251,13 @@
 
 - (void) takeMIDIMessages:(NSArray *)messages
 {
-    // NSLog( @"received MIDI message: %@ of (%lu)", [messages firstObject], (unsigned long)[messages count] );
+    NSLog( @"received MIDI message: %@ of (%lu)", [messages firstObject], (unsigned long)[messages count] );
 
     for ( SMMessage *message in messages )
     {
         if ( self.linnstrumentInUserMode )
         {
-            [self updateLinnstrumentState:message];
+            [self interpretMessageForCurrentLayout:message];
             continue;
         }
 
@@ -200,6 +271,57 @@
             NSLog(@"got non voice message type: %@ from %@", message.typeForDisplay, message.originatingEndpointForDisplay );
         }
     }
+}
+
+- (NSString *)selectedLayout
+{
+    NSString *layout = self.linnLayoutsButton.selectedItem.representedObject;
+    return layout;
+}
+
+- (void)interpretMessageForCurrentLayout:(SMMessage *)message
+{
+    [self updateLinnstrumentState:message];
+
+    if ( [message matchesMessageTypeMask:SMMessageTypeAllVoiceMask] )
+    {
+        SMVoiceMessage *voiceMsg = (SMVoiceMessage *)message;
+        // For all voice messages — Note Number: Column, Channel: Row
+
+        NSString *coord = [NSString stringWithFormat:@"%dx%d",voiceMsg.dataByte1-1, voiceMsg.channel-1];
+
+        NSDictionary *cell = self.grid[coord];
+        if ( cell == nil )
+        {
+            NSLog(@"no cell: %@ %@", coord, self.grid[coord]);
+
+            return;
+        }
+
+        NSLog(@"grid cell: %@ %@", coord, self.grid[coord]);
+
+        if ( voiceMsg.status == SMVoiceMessageStatusNoteOn && [cell[@"type"] isEqualToString:@"note"] )
+        {
+             SMVoiceMessage *noteOn = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusNoteOn];
+             noteOn.channel = 1;
+             noteOn.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
+             noteOn.dataByte2 = voiceMsg.dataByte2; // Velocity
+
+            NSLog(@"note: %@ %@", noteOn.channelForDisplay, noteOn.dataForDisplay);
+            [self.portOut takeMIDIMessages:@[noteOn]];
+        }
+        if (voiceMsg.status == SMVoiceMessageStatusNoteOff )
+        {
+
+             SMVoiceMessage *noteOff = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusNoteOff];
+             noteOff.channel = 1;
+             noteOff.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
+             noteOff.dataByte2 = voiceMsg.dataByte2; // Velocity
+
+            [self.portOut takeMIDIMessages:@[noteOff]];
+        }
+    }
+
 }
 
 - (void) updateLinnstrumentState:(SMMessage *)message
@@ -218,6 +340,7 @@
         if ( voiceMsg.status == SMVoiceMessageStatusNoteOn )
         {
             self.linnstrumentState[coord][@"velocity"] = @(voiceMsg.dataByte2);
+
         }
         else if ( voiceMsg.status == SMVoiceMessageStatusNoteOff )
         {
@@ -277,6 +400,13 @@
     }
 }
 
+- (void) MIDISetupChanged:(NSNotification *)note
+{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        [self _MIDISetupChanged:note];
+    });
+}
+
 - (void) _MIDISetupChanged:(NSNotification *)note
 {
     NSString *linnName = nil;
@@ -320,7 +450,11 @@
         if ( linnIn == nil )
         {
             self.linnConnectedLabel.stringValue = [NSString stringWithFormat:@"No LinnStrument Input, but found output"];
+        }
+        else
+        {
             [self.linnstrumentIn addEndpoint:linnIn]             ;
+            [self.linnstrumentIn setMessageDestination:self];
         }
     }
 
@@ -369,5 +503,26 @@
     [self connectToLinnstrument];
 }
 
+- (IBAction)changeOutput:(id)sender
+{
+    NSString *outputName = self.availableOutputsButton.selectedItem.representedObject;
+    if ( !outputName )
+    {
+        NSLog(@"no output name on outputs selection");
+        return;
+    }
+
+    SMDestinationEndpoint *outEndpoint = [SMDestinationEndpoint destinationEndpointWithName:outputName];
+    if ( outEndpoint == nil )
+    {
+        NSLog(@"couldn't connect to output");
+    }
+    else
+    {
+        NSLog(@"switched to %@", outputName);
+        [self.portOut setEndpoints:[NSSet setWithObject:outEndpoint]];
+        self.lastSelectedOutput = outputName;
+    }
+}
 
 @end

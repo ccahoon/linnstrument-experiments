@@ -757,6 +757,9 @@
                                         </items>
                                     </menu>
                                 </popUpButtonCell>
+                                <connections>
+                                    <action selector="changeOutput:" target="XfG-lQ-9wD" id="a3O-07-z0B"/>
+                                </connections>
                             </popUpButton>
                             <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="xec-U6-dqp">
                                 <rect key="frame" x="17" y="303" width="53" height="17"/>
