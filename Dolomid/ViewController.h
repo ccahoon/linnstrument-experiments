@@ -7,8 +7,9 @@
 //
 
 #import <Cocoa/Cocoa.h>
+#import <SnoizeMIDI/SnoizeMIDI.h>
 
-@interface ViewController : NSViewController
+@interface ViewController : NSViewController <SMMessageDestination>
 
 
 @end

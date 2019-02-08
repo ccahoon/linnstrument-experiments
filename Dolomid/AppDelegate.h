@@ -7,9 +7,8 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#import <SnoizeMIDI/SnoizeMIDI.h>
 
-@interface AppDelegate : NSObject <NSApplicationDelegate, SMMessageDestination>
+@interface AppDelegate : NSObject <NSApplicationDelegate>
 
 
 @end
