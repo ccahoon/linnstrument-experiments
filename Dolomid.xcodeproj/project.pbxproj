@@ -12,7 +12,24 @@
 		7EB41E752209577F004C3C5E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7EB41E742209577F004C3C5E /* Assets.xcassets */; };
 		7EB41E782209577F004C3C5E /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7EB41E762209577F004C3C5E /* Main.storyboard */; };
 		7EB41E7B2209577F004C3C5E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 7EB41E7A2209577F004C3C5E /* main.m */; };
+		7EB41E9A2209582F004C3C5E /* SnoizeMIDI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7EB41E992209582F004C3C5E /* SnoizeMIDI.framework */; };
+		7EB41E9B220958AB004C3C5E /* SnoizeMIDI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7EB41E992209582F004C3C5E /* SnoizeMIDI.framework */; };
+		7EB41E9C220958AB004C3C5E /* SnoizeMIDI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 7EB41E992209582F004C3C5E /* SnoizeMIDI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		7EB41E9D220958AB004C3C5E /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				7EB41E9C220958AB004C3C5E /* SnoizeMIDI.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		7EB41E6B2209577E004C3C5E /* Dolomid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dolomid.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -25,6 +42,7 @@
 		7EB41E792209577F004C3C5E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7EB41E7A2209577F004C3C5E /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		7EB41E7C2209577F004C3C5E /* Dolomid.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Dolomid.entitlements; sourceTree = "<group>"; };
+		7EB41E992209582F004C3C5E /* SnoizeMIDI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SnoizeMIDI.framework; path = Frameworks/SnoizeMIDI.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,6 +50,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7EB41E9A2209582F004C3C5E /* SnoizeMIDI.framework in Frameworks */,
+				7EB41E9B220958AB004C3C5E /* SnoizeMIDI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -43,6 +63,7 @@
 			children = (
 				7EB41E6D2209577E004C3C5E /* Dolomid */,
 				7EB41E6C2209577E004C3C5E /* Products */,
+				7EB41E982209581F004C3C5E /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -70,6 +91,14 @@
 			path = Dolomid;
 			sourceTree = "<group>";
 		};
+		7EB41E982209581F004C3C5E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7EB41E992209582F004C3C5E /* SnoizeMIDI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -80,6 +109,7 @@
 				7EB41E672209577E004C3C5E /* Sources */,
 				7EB41E682209577E004C3C5E /* Frameworks */,
 				7EB41E692209577E004C3C5E /* Resources */,
+				7EB41E9D220958AB004C3C5E /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -277,6 +307,10 @@
 				CODE_SIGN_ENTITLEMENTS = Dolomid/Dolomid.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Frameworks",
+				);
 				INFOPLIST_FILE = Dolomid/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -294,6 +328,10 @@
 				CODE_SIGN_ENTITLEMENTS = Dolomid/Dolomid.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Frameworks",
+				);
 				INFOPLIST_FILE = Dolomid/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
