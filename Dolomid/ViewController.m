@@ -24,8 +24,6 @@
 
 @property (nonatomic, strong, nullable) NSMutableDictionary *linnstrumentState;
 
-@property (nonatomic, assign) NSString *lastSelectedOutput;
-
 @property (weak) IBOutlet NSTextField *linnConnectedLabel;
 @property (weak) IBOutlet NSPopUpButton *linnLayoutsButton;
 @property (weak) IBOutlet NSPopUpButton *availableOutputsButton;
@@ -48,8 +46,11 @@
     [self.linnLayoutsButton addItemWithTitle:@"56 EDO - 7x8"];
     self.linnLayoutsButton.lastItem.representedObject = @"7x8";
 
+    [self.availableOutputsButton removeAllItems];
+
+    /*
     [self.linnLayoutsButton addItemWithTitle:@"49 EDO 7x7 with Low Row Ribbon"];
-    self.linnLayoutsButton.lastItem.representedObject = @"7x7";
+    self.linnLayoutsButton.lastItem.representedObject = @"7x7";*/
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(MIDISetupChanged:) name:@"SMClientSetupChangedNotification" object:nil];
 
@@ -145,11 +146,13 @@
 
     // Row is bottom up, col is left right
     // Incoming data from Linnstrument is 1 based x/y, color setting data is 0 based x/y.
-    for ( int y = 0; y < 8; y++ )
+    // Big Linnstrument has 21 columns.
+
+    for ( int x = 0; x < 21; x++ )
     {
-        // Big Linnstrument has 21 columns.
-        for ( int x = 0; x < 21; x++ )
+        for ( int y = 0; y < 8; y++ )
         {
+
             [cell removeAllObjects];
             cell[@"y"] = @(y);
             cell[@"x"] = @(x);
@@ -167,20 +170,23 @@
                 cell[@"type"] = @"note";
 
                 int note = (x * notesPerColumn + y);
-                int channel = note / 127 + 1;
+                int channel = note / 128;
 
                 int channelNote = note;
                 if ( channel > 0 )
-                    channelNote = (note % (channel * 127)) - 1;
+                    channelNote = (note % (channel * 128));
 
                 cell[@"note"] = @(channelNote);
-                cell[@"channel"] = @(channel);
+                cell[@"channel"] = @(channel+1);
                 cell[@"index"] = @(note);
+
+                // NSLog(@"cell built: %@", cell);
             }
 
             cell[@"colorName"] = colorsByRow[y];
             cell[@"color"] = linnColorsByName[colorsByRow[y]];
             cell[@"color-setting-messages"] = @[[setCol copy], [setRow copy], [setColor copy]];
+            cell[@"axis-setting-messages"] = @[];
 
             grid[[NSString stringWithFormat:@"%dx%d", x, y]] = [cell copy];
         }
@@ -193,6 +199,12 @@
         if ( colorSettings )
         {
             [settings addObjectsFromArray:colorSettings];
+        }
+
+        NSArray *axisSettings = (NSArray <SMMessage *>*)cell[@"axis-setting-messages"];
+        if ( axisSettings )
+        {
+            [settings addObjectsFromArray:axisSettings];
         }
     }
 
@@ -281,8 +293,6 @@
 
 - (void)interpretMessageForCurrentLayout:(SMMessage *)message
 {
-    [self updateLinnstrumentState:message];
-
     if ( [message matchesMessageTypeMask:SMMessageTypeAllVoiceMask] )
     {
         SMVoiceMessage *voiceMsg = (SMVoiceMessage *)message;
@@ -298,65 +308,60 @@
             return;
         }
 
-        NSLog(@"grid cell: %@ %@", coord, self.grid[coord]);
-
-        if ( voiceMsg.status == SMVoiceMessageStatusNoteOn && [cell[@"type"] isEqualToString:@"note"] )
-        {
-             SMVoiceMessage *noteOn = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusNoteOn];
-             noteOn.channel = 1;
-             noteOn.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
-             noteOn.dataByte2 = voiceMsg.dataByte2; // Velocity
-
-            NSLog(@"note: %@ %@", noteOn.channelForDisplay, noteOn.dataForDisplay);
-            [self.portOut takeMIDIMessages:@[noteOn]];
-        }
-        if (voiceMsg.status == SMVoiceMessageStatusNoteOff )
-        {
-
-             SMVoiceMessage *noteOff = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusNoteOff];
-             noteOff.channel = 1;
-             noteOff.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
-             noteOff.dataByte2 = voiceMsg.dataByte2; // Velocity
-
-            [self.portOut takeMIDIMessages:@[noteOff]];
-        }
-    }
-
-}
-
-- (void) updateLinnstrumentState:(SMMessage *)message
-{
-    if ( [message matchesMessageTypeMask:SMMessageTypeAllVoiceMask] )
-    {
-        SMVoiceMessage *voiceMsg = (SMVoiceMessage *)message;
-        // For all voice messages — Note Number: Column, Channel: Row
-
-        NSString *coord = [NSString stringWithFormat:@"%@x%@", @(voiceMsg.dataByte1), @(voiceMsg.channel)];
         if ( self.linnstrumentState[coord] == nil )
         {
             self.linnstrumentState[coord] = [@{} mutableCopy];
         }
 
-        if ( voiceMsg.status == SMVoiceMessageStatusNoteOn )
+        if ( voiceMsg.status == SMVoiceMessageStatusNoteOn && [cell[@"type"] isEqualToString:@"note"] )
         {
+             SMVoiceMessage *noteOn = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusNoteOn];
+             noteOn.channel = ((NSNumber *)cell[@"channel"]).intValue;
+             noteOn.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
+             noteOn.dataByte2 = voiceMsg.dataByte2; // Velocity
+
+            self.linnstrumentState[coord][@"channel"] = @(voiceMsg.dataByte1);
+            self.linnstrumentState[coord][@"note"] = @(voiceMsg.dataByte1);
             self.linnstrumentState[coord][@"velocity"] = @(voiceMsg.dataByte2);
 
+            NSLog(@"note: %@ %@", noteOn.channelForDisplay, noteOn.dataForDisplay);
+            [self.portOut takeMIDIMessages:@[noteOn]];
         }
-        else if ( voiceMsg.status == SMVoiceMessageStatusNoteOff )
+        if ( voiceMsg.status == SMVoiceMessageStatusAftertouch )
         {
-            NSLog(@"note off at %@", coord);
-            // self.linnstrumentState[coord][@"release-velocity"] = @(voiceMsg.dataByte2);
-            [self.linnstrumentState removeObjectForKey:coord];
+            SMVoiceMessage *aftertouch = [message copy];
+            aftertouch.channel = ((NSNumber *)cell[@"channel"]).intValue;
+            aftertouch.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
+            self.linnstrumentState[coord][@"aftertouch"] = @(aftertouch.dataByte2);
+
+            [self.portOut takeMIDIMessages:@[aftertouch]];
         }
-    }
-    else
-    {
-        NSLog(@"unhandled message: %@ %@ %@", (message.typeForDisplay), (message.channelForDisplay), (message.dataForDisplay));
+        if (voiceMsg.status == SMVoiceMessageStatusNoteOff )
+        {
+             SMVoiceMessage *noteOff = [[SMVoiceMessage alloc] initWithTimeStamp:SMGetCurrentHostTime() statusByte:SMVoiceMessageStatusNoteOff];
+             noteOff.channel = ((NSNumber *)cell[@"channel"]).intValue;
+             noteOff.dataByte1 = ((NSNumber *)cell[@"note"]).intValue; // Note
+             noteOff.dataByte2 = voiceMsg.dataByte2; // Velocity
+
+             [self.linnstrumentState removeObjectForKey:coord];
+            [self.portOut takeMIDIMessages:@[noteOff]];
+        }
     }
 
+    [self updateLinnstrumentState:message];
+}
+
+- (void) updateLinnstrumentState:(SMMessage *)message
+{
     NSLog(@"current state: %@", self.linnstrumentState);
     NSLog(@"held buttons: %@", @(self.linnstrumentState.count));
 
+    NSMutableString *statusString = [NSMutableString string];
+    for ( NSString *coord in self.linnstrumentState )
+    {
+        [statusString appendFormat:@"%@: channel %@, note %@\n, velocity: %@, aftertouch: %@", coord, self.linnstrumentState[coord][@"channel"], self.linnstrumentState[coord][@"note"], self.linnstrumentState[coord][@"velocity"], self.linnstrumentState[coord][@"aftertouch"]];
+    }
+    self.statusTextField.stringValue = statusString;
 }
 
 -  (void) playPeakNoteWithVoiceMessage:(SMVoiceMessage *)message
@@ -433,7 +438,7 @@
             [self.availableOutputsButton addItemWithTitle:destination.uniqueName];
             self.availableOutputsButton.lastItem.representedObject = destination.uniqueName;
 
-            if ( [destination.name isEqualToString:self.lastSelectedOutput] )
+            if ( [destination.name isEqualToString:[[NSUserDefaults standardUserDefaults] stringForKey:@"DolomidLastSelectedOutput"]] )
             {
                 [self.availableOutputsButton selectItemWithTitle:destination.uniqueName];
             }
@@ -462,6 +467,8 @@
     if ( !destinationName )
     {
         destinationName = self.availableOutputsButton.lastItem.representedObject;
+        [self.availableOutputsButton selectItem:self.availableOutputsButton.lastItem];
+        [self changeOutput:self.availableOutputsButton];
     }
 
     if ( destinationName )
@@ -521,7 +528,8 @@
     {
         NSLog(@"switched to %@", outputName);
         [self.portOut setEndpoints:[NSSet setWithObject:outEndpoint]];
-        self.lastSelectedOutput = outputName;
+        [[NSUserDefaults standardUserDefaults] setObject:outputName forKey:@"DolomidLastSelectedOutput"];
+
     }
 }
 
